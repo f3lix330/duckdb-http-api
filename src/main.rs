@@ -23,7 +23,7 @@ async fn main() {
     let app = Router::new()
         .route("/query", post(query));
 
-    let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
+    let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
     axum_server::bind(addr)
         .serve(app.into_make_service())
         .await
