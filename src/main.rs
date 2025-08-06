@@ -1,34 +1,38 @@
 use duckdb::{Connection};
 use duckdb::types::ValueRef;
+use axum::{
+    routing::{post},
+    Json, Router,
+};
+use serde::{Deserialize, Serialize};
+use std::net::SocketAddr;
 
-fn main() {
-    let path = "./database.db3";
-    let conn = Connection::open(&path);
-    match conn {
-        Ok(connection) => {
-            println!("Connection established to database. Version: {}", connection.version().unwrap());
-            loop {
-                let mut eingabe = String::new();
-                println!("Enter SQL statement: ");
-                std::io::stdin().read_line(&mut eingabe).unwrap_or_else(|err| {
-                    println!("Error reading line: {}", err);
-                    0
-                });
-                let result = query_db(&eingabe, &connection);
-                for row in result {
-                    println!("{row}");
-                }
-            }
-        },
-        Err(err) => {
-                println!("Error connecting to db: {:?}", err)
-        }
-    }
+#[derive(Serialize)]
+struct ResponseData {
+    result: Vec<String>,
 }
 
-fn query_db(statement: &str, connection: &Connection) -> Vec<String> {
+#[derive(Deserialize)]
+struct InputData {
+    query: String,
+}
+
+#[tokio::main]
+async fn main() {
+
+    let app = Router::new()
+        .route("/query", post(query));
+
+    let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
+    axum_server::bind(addr)
+        .serve(app.into_make_service())
+        .await
+        .unwrap();
+}
+
+fn query_db(statement: String, connection: Connection) -> Vec<String> {
     let mut result = Vec::new();
-    let stmt = connection.prepare(statement);
+    let stmt = connection.prepare(statement.as_str());
     match stmt {
         Ok(mut statement) => {
             let rows = statement.query_map([], |row| {
@@ -55,11 +59,14 @@ fn query_db(statement: &str, connection: &Connection) -> Vec<String> {
                                 ValueRef::Text(s) => String::from_utf8_lossy(s).to_string(),
                                 _ => "[unsupported]".to_string(), // fallback
                             };
+
                             row_string.push_str(&value_str);
                             row_string.push_str(", ");
                         },
                         Err(_) => {
-                            row_string.remove(row_string.len() - 2);
+                            if row_string.ends_with(", ") {
+                                row_string.truncate(row_string.len() - 2);
+                            }
                             break;
                         }
                     }
@@ -90,4 +97,18 @@ fn query_db(statement: &str, connection: &Connection) -> Vec<String> {
         }
     }
     result
+}
+
+async fn query(Json(payload): Json<InputData>) -> Json<ResponseData> {
+    match get_db_connection() {
+        Ok(conn) => {
+            let result = query_db(payload.query, conn);
+            Json(ResponseData { result })
+        }
+        Err(err) => Json(ResponseData { result: vec![err.to_string()] }),
+    }
+}
+
+fn get_db_connection<'a>() -> Result<Connection, duckdb::Error> {
+    Connection::open("./database.db3")
 }
