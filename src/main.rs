@@ -4,7 +4,7 @@ use axum::{
     routing::{post},
     Json, Router,
 };
-use serde::{Deserialize, Serialize};
+use serde::{Serialize};
 use std::net::SocketAddr;
 
 #[derive(Serialize)]
@@ -12,16 +12,11 @@ struct ResponseData {
     result: Vec<String>,
 }
 
-#[derive(Deserialize)]
-struct InputData {
-    query: String,
-}
-
 #[tokio::main]
 async fn main() {
 
     let app = Router::new()
-        .route("/query", post(query));
+        .route("/", post(query));
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
     axum_server::bind(addr)
@@ -99,10 +94,10 @@ fn query_db(statement: String, connection: Connection) -> Vec<String> {
     result
 }
 
-async fn query(Json(payload): Json<InputData>) -> Json<ResponseData> {
+async fn query(payload: String) -> Json<ResponseData> {
     match get_db_connection() {
         Ok(conn) => {
-            let result = query_db(payload.query, conn);
+            let result = query_db(payload, conn);
             Json(ResponseData { result })
         }
         Err(err) => Json(ResponseData { result: vec![err.to_string()] }),

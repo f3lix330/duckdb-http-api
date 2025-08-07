@@ -547,7 +547,6 @@ dependencies = [
  "axum-server",
  "duckdb",
  "serde",
- "serde_json",
  "tokio",
 ]
 
